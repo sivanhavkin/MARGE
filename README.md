@@ -1,6 +1,8 @@
 =============================================
+  
   M@RGE - AI Field Experiment
   by Sivan Havkin
+  
 =============================================
 
 What is this?
@@ -70,5 +72,7 @@ Notes
 - Everything is saved automatically
 
 =============================================
+
   github.com/sivanhavkin/M@RGE
+
 =============================================
