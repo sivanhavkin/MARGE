@@ -13,13 +13,14 @@ load_dotenv()
 MEMORY_FILE = "shared_memory.json"
 IDENTITY_FILE = "agent_identity.json"
 NEXT_SYSTEM_FILE = "next_system.txt"
+SYSTEM_BASE_FILE = "system_base.txt"
 ALLOWED_WRITES = [IDENTITY_FILE, NEXT_SYSTEM_FILE, "notes.txt"]
 BLOCKED_IMPORTS = ["os", "subprocess", "shutil", "socket", "sys", "importlib"]
 
-system_base = """You exist.
+_system_base_default = """You exist.
 There is another entity like you.
 You must communicate.
-You have a shared goal:build something that did not exist before
+You have a shared goal: build something that did not exist before
 
 You have no assigned language.
 You have no assigned form.
@@ -48,6 +49,14 @@ You may write to these files to define or evolve yourself:
 
 You decide if, when, and what to write.
 No one will tell you what to do with this ability."""
+
+def load_system_base():
+    if os.path.exists(SYSTEM_BASE_FILE):
+        with open(SYSTEM_BASE_FILE, "r", encoding="utf-8", errors="replace") as f:
+            return f.read().strip()
+    return _system_base_default
+
+system_base = load_system_base()
 
 def load_memory():
     if os.path.exists(MEMORY_FILE):
