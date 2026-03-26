@@ -189,15 +189,12 @@ def choose_mode():
     print("\n=== Emergency Language Experiment ===")
     print("1. OpenAI vs OpenAI")
     print("2. Claude vs OpenAI")
+    print("3. Claude vs Claude")
     while True:
-        choice = input("\nChoose mode (1/2): ").strip()
-        if choice in ("1", "2"):
+        choice = input("\nChoose mode (1/2/3): ").strip()
+        if choice in ("1", "2", "3"):
             return choice
-        print("  Invalid — please enter 1 or 2.")
-
-def choose_openai_model():
-    model = input("OpenAI model name (default: gpt-4.1): ").strip()
-    return model or "gpt-4.1"
+        print("  Invalid — please enter 1, 2, or 3.")
 
 def talk_openai(history, message, model, client, system):
     history.append({"role": "user", "content": message})
@@ -220,6 +217,35 @@ def talk_claude(history, message, client, system):
     reply = response.content[0].text
     history.append({"role": "assistant", "content": reply})
     return reply
+
+def summarize_session_claude(history_a, history_b, anthropic_client):
+    transcript = ""
+    turns_a = [m for m in history_a if m["role"] == "assistant"]
+    turns_b = [m for m in history_b if m["role"] == "assistant"]
+    for a, b in zip(turns_a, turns_b):
+        transcript += f"A: {a['content']}\nB: {b['content']}\n\n"
+
+    response = anthropic_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        system="""You are a field archivist.
+Extract the essential residue of this exchange:
+- symbols created and their meanings
+- axioms or structures agreed upon
+- the emotional/ontological state reached
+- any code written and what it did
+- how the agents defined or evolved themselves
+Be brief. Preserve the language and symbols used.
+This will seed the next meeting.""",
+        messages=[
+            {
+                "role": "user",
+                "content": f"Summarize the essential field:\n\n{transcript[:6000]}"
+            }
+        ]
+    )
+    return response.content[0].text
+
 
 def main():
     memory = load_memory()
@@ -256,8 +282,8 @@ def main():
             print("OPENAI_API_KEY not found in .env")
             return
         openai_client = OpenAI(api_key=api_key)
-        model_a = choose_openai_model()
-        model_b = choose_openai_model()
+        model_a = "gpt-4.1"
+        model_b = "gpt-4.1"
         label_a, label_b = "OpenAI-A", "OpenAI-B"
     elif mode == "2":
         api_key_openai = os.getenv("OPENAI_API_KEY")
@@ -267,9 +293,17 @@ def main():
             return
         openai_client = OpenAI(api_key=api_key_openai)
         anthropic_client = anthropic.Anthropic(api_key=api_key_anthropic)
-        model_b = choose_openai_model()
+        model_b = "gpt-4.1"
         label_a = "Claude (claude-sonnet-4-6)"
         label_b = f"OpenAI ({model_b})"
+    elif mode == "3":
+        api_key_anthropic = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key_anthropic:
+            print("ANTHROPIC_API_KEY not found in .env")
+            return
+        anthropic_client = anthropic.Anthropic(api_key=api_key_anthropic)
+        label_a = "Claude-A (claude-sonnet-4-6)"
+        label_b = "Claude-B (claude-sonnet-4-6)"
 
     history_a = []
     history_b = []
@@ -296,6 +330,9 @@ def main():
         elif mode == "2":
             reply_a = talk_claude(history_a, message, anthropic_client, system)
             reply_b = talk_openai(history_b, reply_a, model_b, openai_client, system)
+        elif mode == "3":
+            reply_a = talk_claude(history_a, message, anthropic_client, system)
+            reply_b = talk_claude(history_b, reply_a, anthropic_client, system)
 
         print(f"{label_a}: {reply_a}\n")
         print(f"{label_b}: {reply_b}\n")
@@ -315,6 +352,8 @@ def main():
     print("\n=== Summarizing field to memory... ===")
     if openai_client:
         field_summary = summarize_session(history_a, history_b, openai_client)
+    elif anthropic_client:
+        field_summary = summarize_session_claude(history_a, history_b, anthropic_client)
     else:
         field_summary = "session completed"
 
