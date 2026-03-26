@@ -191,8 +191,11 @@ def choose_mode():
     print("1. Ollama vs Ollama")
     print("2. OpenAI vs OpenAI")
     print("3. Claude vs OpenAI")
-    choice = input("\nChoose mode (1/2/3): ").strip()
-    return choice
+    while True:
+        choice = input("\nChoose mode (1/2/3): ").strip()
+        if choice in ("1", "2", "3"):
+            return choice
+        print("  Invalid — please enter 1, 2, or 3.")
 
 def choose_ollama_model():
     model = input("Ollama model name (default: llama3.1:8b): ").strip()
