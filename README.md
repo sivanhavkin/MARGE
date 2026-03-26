@@ -50,9 +50,8 @@ python M@RGE.py
 
 | # | Mode | Description |
 |---|------|-------------|
-| 1 | **Ollama vs Ollama** | Local models — no API cost |
-| 2 | **OpenAI vs OpenAI** | GPT vs GPT |
-| 3 | **Claude vs OpenAI** | ⭐ Recommended — most interesting results |
+| 1 | **OpenAI vs OpenAI** | GPT vs GPT |
+| 2 | **Claude vs OpenAI** | ⭐ Recommended — most interesting results |
 
 ### 4. Choose Rounds
 

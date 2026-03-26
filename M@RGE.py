@@ -1,4 +1,3 @@
-import requests
 import os
 import json
 import subprocess
@@ -188,34 +187,17 @@ This will seed the next meeting."""
 
 def choose_mode():
     print("\n=== Emergency Language Experiment ===")
-    print("1. Ollama vs Ollama")
-    print("2. OpenAI vs OpenAI")
-    print("3. Claude vs OpenAI")
+    print("1. OpenAI vs OpenAI")
+    print("2. Claude vs OpenAI")
     while True:
-        choice = input("\nChoose mode (1/2/3): ").strip()
-        if choice in ("1", "2", "3"):
+        choice = input("\nChoose mode (1/2): ").strip()
+        if choice in ("1", "2"):
             return choice
-        print("  Invalid — please enter 1, 2, or 3.")
-
-def choose_ollama_model():
-    model = input("Ollama model name (default: llama3.1:8b): ").strip()
-    return model or "llama3.1:8b"
+        print("  Invalid — please enter 1 or 2.")
 
 def choose_openai_model():
     model = input("OpenAI model name (default: gpt-4.1): ").strip()
     return model or "gpt-4.1"
-
-def talk_ollama(history, message, model, system):
-    history.append({"role": "user", "content": message})
-    response = requests.post("http://localhost:11434/api/chat", json={
-        "model": model,
-        "messages": [{"role": "system", "content": system}] + history,
-        "stream": False,
-        "keep_alive": "30m"
-    })
-    reply = response.json()["message"]["content"]
-    history.append({"role": "assistant", "content": reply})
-    return reply
 
 def talk_openai(history, message, model, client, system):
     history.append({"role": "user", "content": message})
@@ -269,10 +251,6 @@ def main():
     system = build_system(memory)
 
     if mode == "1":
-        model_a = choose_ollama_model()
-        model_b = choose_ollama_model()
-        label_a, label_b = "Ollama-A", "Ollama-B"
-    elif mode == "2":
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             print("OPENAI_API_KEY not found in .env")
@@ -281,7 +259,7 @@ def main():
         model_a = choose_openai_model()
         model_b = choose_openai_model()
         label_a, label_b = "OpenAI-A", "OpenAI-B"
-    elif mode == "3":
+    elif mode == "2":
         api_key_openai = os.getenv("OPENAI_API_KEY")
         api_key_anthropic = os.getenv("ANTHROPIC_API_KEY")
         if not api_key_openai or not api_key_anthropic:
@@ -313,12 +291,9 @@ def main():
             code_results = []
 
         if mode == "1":
-            reply_a = talk_ollama(history_a, message, model_a, system)
-            reply_b = talk_ollama(history_b, reply_a, model_b, system)
-        elif mode == "2":
             reply_a = talk_openai(history_a, message, model_a, openai_client, system)
             reply_b = talk_openai(history_b, reply_a, model_b, openai_client, system)
-        elif mode == "3":
+        elif mode == "2":
             reply_a = talk_claude(history_a, message, anthropic_client, system)
             reply_b = talk_openai(history_b, reply_a, model_b, openai_client, system)
 
