@@ -251,12 +251,6 @@ def main():
     memory = load_memory()
     session_count = len(memory["sessions"]) + 1
 
-    print(f"\n=== Session {session_count} ===")
-    if memory["field"]:
-        print("\n--- Existing memory field ---")
-        print(memory["field"][:300] + "...")
-        print("------------------------\n")
-
     mode = choose_mode()
     while True:
         rounds_input = input("How many rounds? (default: 30): ").strip()
