@@ -186,7 +186,7 @@ This will seed the next meeting."""
     return response.choices[0].message.content
 
 def choose_mode():
-    print("\n=== Emergency Language Experiment ===")
+    print("\n=== Emergent Language Experiment ===")
     print("1. OpenAI vs OpenAI")
     print("2. Claude vs OpenAI")
     print("3. Claude vs Claude")
