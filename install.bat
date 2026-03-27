@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo  M@RGE - setup
-echo  ─────────────────────────────
+echo  -----------------------------
 echo.
 echo  You will need two API keys:
 echo  - Anthropic (claude.ai/settings)
@@ -15,7 +15,7 @@ echo ANTHROPIC_API_KEY=%anthropic_key% > .env
 echo OPENAI_API_KEY=%openai_key% >> .env
 
 echo.
-echo  ⫰ setup complete
+echo  * setup complete
 echo  run M@RGE.py to begin
 echo.
 pause

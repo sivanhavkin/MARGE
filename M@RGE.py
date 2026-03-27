@@ -331,7 +331,7 @@ def main():
         print(f"{label_a}: {reply_a}\n")
         print(f"{label_b}: {reply_b}\n")
 
-        # חפש ורץ קוד
+        # search and run code
         results_a = extract_and_run_code(reply_a)
         results_b = extract_and_run_code(reply_b)
         code_results = results_a + results_b
