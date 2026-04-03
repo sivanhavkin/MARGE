@@ -21,6 +21,12 @@ import chess.svg
 import streamlit as st
 from dotenv import load_dotenv
 
+# Default Stockfish binary bundled with the project (Windows AVX2 build).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DEFAULT_STOCKFISH_PATH = os.path.join(
+    _REPO_ROOT, "stockfish-windows-x86-64-avx2.exe"
+)
+
 load_dotenv()
 
 # ---------------------------------------------------------------------------
@@ -281,7 +287,7 @@ def main():
         if "Stockfish" in mode or "Neural Network" in mode:
             raw_sf_path = st.text_input(
                 "Stockfish binary path",
-                value=os.getenv("STOCKFISH_PATH", "/usr/games/stockfish"),
+                value=os.getenv("STOCKFISH_PATH", _DEFAULT_STOCKFISH_PATH),
                 help="Full path to the Stockfish executable",
             )
             stockfish_path = _validated_stockfish_path(raw_sf_path)
