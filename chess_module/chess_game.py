@@ -77,8 +77,8 @@ class ChessGame:
                 move = chess.Move.from_uci(uci_str)
                 if move in self.board.legal_moves:
                     return move, raw_response
-            except Exception:
-                pass
+            except Exception as exc:
+                raw_response = f"[error attempt {attempt + 1}] {exc}"
         # Fall back to a random legal move
         legal = list(self.board.legal_moves)
         move = random.choice(legal)

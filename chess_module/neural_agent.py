@@ -30,10 +30,19 @@ import torch.nn.functional as F
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-MODEL_SAVE_PATH = "chess_module/nn_chess_model.pt"
-TRAINING_LOG_FILE = "chess_module/nn_training_log.json"
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_SAVE_PATH = os.path.join(_MODULE_DIR, "nn_chess_model.pt")
+TRAINING_LOG_FILE = os.path.join(_MODULE_DIR, "nn_training_log.json")
 NUM_PLANES = 12          # 6 piece types × 2 colours
-NUM_MOVES = 64 * 64      # all from→to combinations (pruned to legal at runtime)
+# Action space: 4096 non-promotion indices (from_sq*64 + to_sq) +
+# four additional tiers of 4096 each, one per promo piece (Q/R/B/N).
+_NUM_BASE_MOVES = 64 * 64          # 4096
+_NUM_PROMO_TYPES = 4               # queen, rook, bishop, knight
+NUM_MOVES = _NUM_BASE_MOVES * (_NUM_PROMO_TYPES + 1)  # 20480
+
+_PROMO_PIECES = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
+_PROMO_PIECE_TO_IDX = {p: i for i, p in enumerate(_PROMO_PIECES)}
+
 
 PIECE_TO_PLANE = {
     (chess.PAWN,   chess.WHITE): 0,
@@ -68,10 +77,28 @@ def board_to_tensor(board: chess.Board) -> torch.Tensor:
 
 
 def move_to_index(move: chess.Move) -> int:
-    return move.from_square * 64 + move.to_square
+    """Encode a move as an integer index in [0, NUM_MOVES).
+
+    Non-promotion: from_sq * 64 + to_sq  (range 0 – 4095)
+    Promotion    : _NUM_BASE_MOVES + promo_idx * _NUM_BASE_MOVES
+                   + from_sq * 64 + to_sq  (range 4096 – 20479)
+    """
+    base = move.from_square * 64 + move.to_square
+    if move.promotion:
+        promo_idx = _PROMO_PIECE_TO_IDX[move.promotion]
+        return _NUM_BASE_MOVES + promo_idx * _NUM_BASE_MOVES + base
+    return base
 
 
 def index_to_move(idx: int) -> chess.Move:
+    """Decode an integer index back to a chess.Move (inverse of move_to_index)."""
+    if idx >= _NUM_BASE_MOVES:
+        idx -= _NUM_BASE_MOVES
+        promo_idx = idx // _NUM_BASE_MOVES
+        base = idx % _NUM_BASE_MOVES
+        from_sq = base // 64
+        to_sq = base % 64
+        return chess.Move(from_sq, to_sq, promotion=_PROMO_PIECES[promo_idx])
     from_sq = idx // 64
     to_sq = idx % 64
     return chess.Move(from_sq, to_sq)
@@ -221,16 +248,22 @@ class ChessNeuralAgent:
                 probs = F.softmax(masked_logits, dim=0)
 
                 chosen_idx = torch.multinomial(probs, 1)
-                log_prob = torch.log(probs[chosen_idx] + 1e-8)
+                move_idx = chosen_idx.item()
+                chosen_move = index_to_move(move_idx)
+                # With correct promotion encoding every legal move has a unique
+                # index, so the fallback should not trigger in practice.
+                # It is kept as a guard against any future encoding edge-cases;
+                # log_prob is recomputed for the actually executed move so the
+                # REINFORCE gradient is always correct.
+                if chosen_move not in board.legal_moves:
+                    chosen_move = random.choice(legal_moves)
+                    move_idx = move_to_index(chosen_move)
+                log_prob = torch.log(probs[move_idx] + 1e-8)
                 entropy = -(probs * torch.log(probs + 1e-8)).sum()
 
                 log_probs.append(log_prob)
                 entropies.append(entropy)
 
-                move_idx = chosen_idx.item()
-                chosen_move = index_to_move(move_idx)
-                if chosen_move not in board.legal_moves:
-                    chosen_move = random.choice(legal_moves)
                 board.push(chosen_move)
             else:
                 # Stockfish's turn

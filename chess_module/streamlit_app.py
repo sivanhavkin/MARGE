@@ -12,7 +12,6 @@ Run with:
 
 import os
 import random
-import threading
 import time
 from typing import Optional
 
@@ -103,7 +102,6 @@ def make_gpt_player(label: str = "GPT"):
 def make_claude_player(label: str = "Claude"):
     """Return a player_fn that queries Claude for a chess move."""
     def _fn(fen: str, system_prompt: str) -> str:
-        import anthropic
         client = get_anthropic_client()
         if client is None:
             raise RuntimeError("Anthropic API key not configured")
@@ -119,15 +117,22 @@ def make_claude_player(label: str = "Claude"):
     return _fn
 
 
+@st.cache_resource
+def _get_stockfish_engine(stockfish_path: str, skill_level: int):
+    """Create (and cache) one Stockfish engine process per (path, skill) pair."""
+    import chess.engine
+    engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+    engine.configure({"Skill Level": skill_level})
+    return engine
+
+
 def make_stockfish_player(stockfish_path: str, skill_level: int = 5):
-    """Return a player_fn backed by Stockfish."""
+    """Return a player_fn backed by a cached (reused) Stockfish engine."""
     def _fn(fen: str, _system_prompt: str) -> str:
-        import chess.engine
-        with chess.engine.SimpleEngine.popen_uci(stockfish_path) as engine:
-            engine.configure({"Skill Level": skill_level})
-            board = chess.Board(fen)
-            result = engine.play(board, chess.engine.Limit(time=0.1))
-            return result.move.uci()
+        engine = _get_stockfish_engine(stockfish_path, skill_level)
+        board = chess.Board(fen)
+        result = engine.play(board, chess.engine.Limit(time=0.1))
+        return result.move.uci()
     return _fn
 
 
@@ -207,8 +212,8 @@ def execute_one_move():
             if candidate in board.legal_moves:
                 move = candidate
                 break
-        except Exception:
-            pass
+        except Exception as exc:
+            raw_response = f"[error attempt {attempt + 1}] {exc}"
 
     if move is None:
         legal = list(board.legal_moves)
@@ -284,7 +289,8 @@ def main():
 
         stockfish_path = None
         stockfish_skill = 5
-        if "Stockfish" in mode or "Neural Network" in mode:
+        # Show Stockfish game controls only when Stockfish is used for actual play.
+        if mode == "Neural Network vs Stockfish":
             raw_sf_path = st.text_input(
                 "Stockfish binary path",
                 value=os.getenv("STOCKFISH_PATH", _DEFAULT_STOCKFISH_PATH),
@@ -296,10 +302,19 @@ def main():
         if "Neural Network" in mode:
             st.markdown("---")
             st.subheader("🧠 Neural Network Training")
+            # For modes that don't use Stockfish for game play, provide a
+            # separate path input so training can still be run.
+            if mode != "Neural Network vs Stockfish":
+                raw_sf_path_train = st.text_input(
+                    "Stockfish path (for training)",
+                    value=os.getenv("STOCKFISH_PATH", _DEFAULT_STOCKFISH_PATH),
+                    help="Full path to the Stockfish executable used during NN training",
+                )
+                stockfish_path = _validated_stockfish_path(raw_sf_path_train)
             train_games = st.number_input("Training games", min_value=1, max_value=10000, value=100)
             train_btn = st.button("Train Neural Network")
             if train_btn:
-                if not stockfish_path:
+                if not stockfish_path or not os.path.isfile(stockfish_path):
                     st.error("Valid Stockfish path required for training.")
                 else:
                     agent = get_neural_agent()
@@ -354,11 +369,15 @@ def main():
             st.session_state.black_label = "GPT (Black)"
 
         elif mode == "Neural Network vs Stockfish":
-            if not stockfish_path:
+            if not stockfish_path or not os.path.isfile(stockfish_path):
                 st.error("Valid Stockfish path required.")
                 st.stop()
             st.session_state.white_fn = make_nn_player()
-            st.session_state.black_fn = make_stockfish_player(stockfish_path, stockfish_skill)
+            try:
+                st.session_state.black_fn = make_stockfish_player(stockfish_path, stockfish_skill)
+            except Exception as exc:
+                st.error(f"Failed to start Stockfish: {exc}")
+                st.stop()
             st.session_state.white_label = "Neural Network (White)"
             st.session_state.black_label = f"Stockfish L{stockfish_skill} (Black)"
 
