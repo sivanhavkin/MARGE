@@ -6,6 +6,7 @@ Logs all moves and responses to shared memory JSON.
 
 import json
 import os
+import re
 import random
 from datetime import datetime
 from typing import Optional, Callable
@@ -18,13 +19,60 @@ MEMORY_FILE = "shared_memory.json"
 CHESS_SYSTEM_PROMPT = """You are playing chess. The board state will be given to you as a FEN string.
 
 Chess rules reminder:
-- Respond with a single legal UCI move (e.g. e2e4, g1f3, e1g1 for castling).
-- A UCI move is: source square + destination square (+ promotion piece if pawn promotes).
-- Only legal moves are accepted. Think carefully about which pieces can move where.
+- Respond with a single legal UCI move in the format: source_square + destination_square.
+- UCI format uses file (a-h) and rank (1-8), e.g. e2e4 means the piece on e2 moves to e4.
+- For pawn promotion, append the piece letter: a7a8q (queen), a7a8r (rook), a7a8b (bishop), a7a8n (knight).
+- Do NOT use algebraic notation like Nf3 or exd4 — always use the full source+destination form.
 - Do not include any explanation — respond with ONLY the UCI move string.
 
 Example responses: e2e4  |  d7d5  |  g1f3  |  e1g1  |  a7a8q
 """
+
+# Regex that matches a UCI move substring anywhere in model output (lowercase text).
+_UCI_RE = re.compile(r'\b([a-h][1-8][a-h][1-8][qrbn]?)\b')
+
+# Characters commonly wrapping tokens in LLM output that are not part of a move.
+_STRIP_CHARS = ".,!?;:()[]`'\""
+
+
+def parse_move_from_response(board: chess.Board, raw: str) -> Optional[chess.Move]:
+    """Extract the first legal move from a model response.
+
+    Tries in order:
+    1. First whitespace-separated token parsed as UCI (lowercased).
+    2. Any UCI-looking substring found via regex on the lowercased text.
+    3. Each token parsed as SAN (handles Nf3, exd4, etc.) after stripping
+       surrounding punctuation, backticks, and quotes.
+
+    Returns a chess.Move on success, or None if no legal move can be found.
+    """
+    text = raw.strip()
+    if not text:
+        return None
+
+    # 1. First token as UCI (normalize to lowercase)
+    first_token = text.split()[0].strip(_STRIP_CHARS).lower()
+    try:
+        return board.parse_uci(first_token)
+    except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError):
+        pass
+
+    # 2. Regex search for UCI-format substring (search on lowercased text)
+    for m in _UCI_RE.finditer(text.lower()):
+        try:
+            return board.parse_uci(m.group(1).lower())
+        except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError):
+            continue
+
+    # 3. Try SAN parsing on each token (strip surrounding non-move characters)
+    for token in text.split():
+        token_clean = token.strip(_STRIP_CHARS)
+        try:
+            return board.parse_san(token_clean)
+        except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError):
+            continue
+
+    return None
 
 
 def load_memory() -> dict:
@@ -73,9 +121,9 @@ class ChessGame:
         for attempt in range(3):
             try:
                 raw_response = player_fn(fen, CHESS_SYSTEM_PROMPT)
-                uci_str = raw_response.strip().split()[0] if raw_response.strip() else ""
-                move = self.board.parse_uci(uci_str)
-                return move, raw_response
+                move = parse_move_from_response(self.board, raw_response)
+                if move is not None:
+                    return move, raw_response
             except Exception as exc:
                 raw_response = f"[error attempt {attempt + 1}] {exc}"
         # Fall back to a random legal move

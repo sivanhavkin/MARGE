@@ -199,7 +199,7 @@ def execute_one_move():
     label = st.session_state.white_label if is_white else st.session_state.black_label
     player_fn = st.session_state.white_fn if is_white else st.session_state.black_fn
 
-    from chess_module.chess_game import CHESS_SYSTEM_PROMPT
+    from chess_module.chess_game import CHESS_SYSTEM_PROMPT, parse_move_from_response
     fen = board.fen()
     raw_response = ""
     move = None
@@ -207,9 +207,9 @@ def execute_one_move():
     for attempt in range(3):
         try:
             raw_response = player_fn(fen, CHESS_SYSTEM_PROMPT)
-            uci_str = raw_response.strip().split()[0] if raw_response.strip() else ""
-            move = board.parse_uci(uci_str)
-            break
+            move = parse_move_from_response(board, raw_response)
+            if move is not None:
+                break
         except Exception as exc:
             raw_response = f"[error attempt {attempt + 1}] {exc}"
 
