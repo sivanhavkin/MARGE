@@ -28,17 +28,21 @@ Chess rules reminder:
 Example responses: e2e4  |  d7d5  |  g1f3  |  e1g1  |  a7a8q
 """
 
-# Regex that matches a UCI move substring anywhere in model output.
+# Regex that matches a UCI move substring anywhere in model output (lowercase text).
 _UCI_RE = re.compile(r'\b([a-h][1-8][a-h][1-8][qrbn]?)\b')
+
+# Characters commonly wrapping tokens in LLM output that are not part of a move.
+_STRIP_CHARS = ".,!?;:()[]`'\""
 
 
 def parse_move_from_response(board: chess.Board, raw: str) -> Optional[chess.Move]:
     """Extract the first legal move from a model response.
 
     Tries in order:
-    1. First whitespace-separated token parsed as UCI.
-    2. Any UCI-looking substring found via regex.
-    3. Each token parsed as SAN (handles Nf3, exd4, etc.).
+    1. First whitespace-separated token parsed as UCI (lowercased).
+    2. Any UCI-looking substring found via regex on the lowercased text.
+    3. Each token parsed as SAN (handles Nf3, exd4, etc.) after stripping
+       surrounding punctuation, backticks, and quotes.
 
     Returns a chess.Move on success, or None if no legal move can be found.
     """
@@ -46,23 +50,23 @@ def parse_move_from_response(board: chess.Board, raw: str) -> Optional[chess.Mov
     if not text:
         return None
 
-    # 1. First token as UCI
-    first_token = text.split()[0].strip(".,!?;:()")
+    # 1. First token as UCI (normalize to lowercase)
+    first_token = text.split()[0].strip(_STRIP_CHARS).lower()
     try:
         return board.parse_uci(first_token)
     except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError):
         pass
 
-    # 2. Regex search for UCI-format substring
-    for m in _UCI_RE.finditer(text):
+    # 2. Regex search for UCI-format substring (search on lowercased text)
+    for m in _UCI_RE.finditer(text.lower()):
         try:
-            return board.parse_uci(m.group(1))
+            return board.parse_uci(m.group(1).lower())
         except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError):
             continue
 
-    # 3. Try SAN parsing on each token
+    # 3. Try SAN parsing on each token (strip surrounding non-move characters)
     for token in text.split():
-        token_clean = token.strip(".,!?;:()")
+        token_clean = token.strip(_STRIP_CHARS)
         try:
             return board.parse_san(token_clean)
         except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError):
