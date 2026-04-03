@@ -74,9 +74,8 @@ class ChessGame:
             try:
                 raw_response = player_fn(fen, CHESS_SYSTEM_PROMPT)
                 uci_str = raw_response.strip().split()[0] if raw_response.strip() else ""
-                move = chess.Move.from_uci(uci_str)
-                if move in self.board.legal_moves:
-                    return move, raw_response
+                move = self.board.parse_uci(uci_str)
+                return move, raw_response
             except Exception as exc:
                 raw_response = f"[error attempt {attempt + 1}] {exc}"
         # Fall back to a random legal move
