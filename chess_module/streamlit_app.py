@@ -208,10 +208,8 @@ def execute_one_move():
         try:
             raw_response = player_fn(fen, CHESS_SYSTEM_PROMPT)
             uci_str = raw_response.strip().split()[0] if raw_response.strip() else ""
-            candidate = chess.Move.from_uci(uci_str)
-            if candidate in board.legal_moves:
-                move = candidate
-                break
+            move = board.parse_uci(uci_str)
+            break
         except Exception as exc:
             raw_response = f"[error attempt {attempt + 1}] {exc}"
 
@@ -415,7 +413,7 @@ def main():
     with col_board:
         st.subheader("♟️ Board")
         svg = render_board(st.session_state.board, st.session_state.last_move)
-        st.image(svg.encode(), use_container_width=False)
+        st.components.v1.html(svg, height=420)
 
         if st.session_state.game_over:
             st.success(f"Game over! Result: **{st.session_state.game_result}**")
