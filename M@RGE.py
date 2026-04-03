@@ -196,6 +196,46 @@ def choose_mode():
             return choice
         print("  Invalid — please enter 1, 2, or 3.")
 
+def choose_activity():
+    print("\n=== Activity ===")
+    print("1. Emergent Language Conversation")
+    print("2. Chess")
+    while True:
+        choice = input("\nChoose activity (1/2): ").strip()
+        if choice in ("1", "2"):
+            return choice
+        print("  Invalid — please enter 1 or 2.")
+
+def make_gpt_chess_player(model, client):
+    """Return a chess player_fn backed by an OpenAI model."""
+    from chess_module.chess_game import CHESS_SYSTEM_PROMPT
+    def _fn(fen, system_prompt):
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Current position (FEN): {fen}\nYour move:"},
+            ],
+            max_tokens=10,
+            temperature=0.2,
+        )
+        return response.choices[0].message.content.strip()
+    return _fn
+
+def make_claude_chess_player(client):
+    """Return a chess player_fn backed by Claude."""
+    def _fn(fen, system_prompt):
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=20,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": f"Current position (FEN): {fen}\nYour move:"},
+            ],
+        )
+        return response.content[0].text.strip()
+    return _fn
+
 def talk_openai(history, message, model, client, system):
     history.append({"role": "user", "content": message})
     response = client.chat.completions.create(
@@ -252,16 +292,7 @@ def main():
     session_count = len(memory["sessions"]) + 1
 
     mode = choose_mode()
-    while True:
-        rounds_input = input("How many rounds? (default: 30): ").strip()
-        if rounds_input == "":
-            rounds = 30
-            break
-        elif rounds_input.isdigit() and int(rounds_input) > 0:
-            rounds = int(rounds_input)
-            break
-        else:
-            print("  Invalid — please enter a number.")
+    activity = choose_activity()
 
     openai_client = None
     anthropic_client = None
@@ -298,6 +329,60 @@ def main():
         anthropic_client = anthropic.Anthropic(api_key=api_key_anthropic)
         label_a = "Claude-A (claude-sonnet-4-6)"
         label_b = "Claude-B (claude-sonnet-4-6)"
+
+    # -----------------------------------------------------------------------
+    # Chess mode
+    # -----------------------------------------------------------------------
+    if activity == "2":
+        from chess_module.chess_game import ChessGame
+
+        if mode == "1":
+            white_fn = make_gpt_chess_player(model_a, openai_client)
+            black_fn = make_gpt_chess_player(model_b, openai_client)
+            white_label = f"{label_a} (White)"
+            black_label = f"{label_b} (Black)"
+        elif mode == "2":
+            white_fn = make_claude_chess_player(anthropic_client)
+            black_fn = make_gpt_chess_player(model_b, openai_client)
+            white_label = "Claude (White)"
+            black_label = f"{label_b} (Black)"
+        else:  # mode == "3"
+            white_fn = make_claude_chess_player(anthropic_client)
+            black_fn = make_claude_chess_player(anthropic_client)
+            white_label = "Claude-A (White)"
+            black_label = "Claude-B (Black)"
+
+        def on_move(board, move, label, response):
+            print(f"  {label}: {move.uci()}  (raw: {response})")
+
+        game = ChessGame(
+            white_fn, black_fn,
+            player_white_label=white_label,
+            player_black_label=black_label,
+            on_move=on_move,
+        )
+        print(f"\n=== Chess Game | {white_label} vs {black_label} ===\n")
+        result = game.play_game()
+        print(f"\n=== Game Over ===")
+        print(f"Result : {result['result']}")
+        if result["winner"]:
+            print(f"Winner : {result['winner']}")
+        print(f"Moves  : {result['total_moves']}")
+        return
+
+    # -----------------------------------------------------------------------
+    # Conversation mode — ask for rounds only when needed
+    # -----------------------------------------------------------------------
+    while True:
+        rounds_input = input("How many rounds? (default: 30): ").strip()
+        if rounds_input == "":
+            rounds = 30
+            break
+        elif rounds_input.isdigit() and int(rounds_input) > 0:
+            rounds = int(rounds_input)
+            break
+        else:
+            print("  Invalid — please enter a number.")
 
     history_a = []
     history_b = []
