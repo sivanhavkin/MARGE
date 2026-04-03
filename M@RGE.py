@@ -333,7 +333,14 @@ def main():
     # Chess mode
     # -----------------------------------------------------------------------
     if activity == "2":
-        from chess_module.chess_game import ChessGame
+        try:
+            from chess_module.chess_game import ChessGame
+        except ModuleNotFoundError as exc:
+            if exc.name == "chess":
+                print("\nChess mode requires the 'python-chess' package.")
+                print("Install it with:  pip install python-chess")
+                return
+            raise
 
         if mode == "1":
             white_fn = make_gpt_chess_player(model_a, openai_client)
