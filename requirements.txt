@@ -2,3 +2,7 @@ openai
 anthropic
 python-dotenv
 requests
+# Chess module dependencies
+python-chess
+torch
+streamlit

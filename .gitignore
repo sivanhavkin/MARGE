@@ -20,3 +20,7 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+# Chess module - generated files
+chess_module/nn_chess_model.pt
+chess_module/nn_training_log.json
